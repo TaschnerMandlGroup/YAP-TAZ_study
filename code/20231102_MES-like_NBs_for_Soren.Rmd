@@ -1,0 +1,652 @@
+---
+title: "NB tumors with MES-like features"
+author: 'Sara Wernig-Zorc'
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    collapsed: false
+    code_folding: hide
+    highlight: pygments
+    theme: spacelab
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      tidy = TRUE, 
+                      error = FALSE, 
+                      messages = FALSE,
+                      warning = FALSE)
+```
+
+## __Project description__ 
+
+[05.07.2023 16:48] Strohmenger Sören
+
+Check gene expression of the following genes:
+YAP1, 
+WWTR1, 
+JUN, 
+FOSL1, 
+FOSL2
+
+<br>
+
+Specifically of interest are the NB tumor samples, which have been previously 
+shown to have MES-like features. Here we focus on tumor cells, but of interest 
+would also be TME cells, as these might me misclassified as tumor cells. 
+
+<br>
+<br>
+<br>
+
+## 1. Jansky et al., 2021
+
+In this paper they show NB02, NB13 and NB14 to have MES-like features.
+
+```{r jansky2021 data}
+library(Seurat)
+jansky2021 <- readRDS(file="/home/data/nb_tumors/jansky2021.scRNA/Neuroblastoma_sc_Jansky.rds")
+
+jansky2021@meta.data
+
+
+DimPlot(jansky2021, group.by = "celltype", label = TRUE)
+DimPlot(jansky2021, group.by = "patientID", label = TRUE,
+        repel = TRUE)
+```
+
+<br>
+<br>
+
+### __Analysis on all clusters__
+
+
+```{r jansky2021 plots all, fig.height=15, fig.width=10}
+library(viridis)
+
+pal <- viridis(n = 10, option = "C", direction = -1)
+
+FeaturePlot(jansky2021, 
+            features = c("YAP1", "WWTR1","JUN", "FOSL1","FOSL2"), 
+            cols = pal, order = T)
+```
+
+
+```{r jansky2021 plots split, fig.height=5, fig.width=50}
+# YAP1
+FeaturePlot(jansky2021, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# WWTR1
+FeaturePlot(jansky2021, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# JUN
+FeaturePlot(jansky2021, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "patientID")
+
+# FOSL1
+FeaturePlot(jansky2021, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# FOSL2
+FeaturePlot(jansky2021, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "patientID")
+```
+
+<br>
+<br>
+
+### __Analysis on the tumor cluster only__
+
+Tumor cells were defined by inferCNV
+
+```{r jansky2021 tumor cluster only, fig.height=5, fig.width=50}
+jansky2021.TU <- subset(jansky2021,subset = CNV == "tumor")
+jansky2021.TU@meta.data
+
+# YAP
+FeaturePlot(jansky2021.TU, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# WWTR1
+FeaturePlot(jansky2021.TU, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# JUN
+FeaturePlot(jansky2021.TU, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "patientID")
+
+# FOSL1
+FeaturePlot(jansky2021.TU, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "patientID")
+
+# FOSL2
+FeaturePlot(jansky2021.TU, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "patientID")
+```
+
+```{r jansky2021 tumor cluster only 2, fig.height=5, fig.width=50}
+# YAP
+FeaturePlot(jansky2021.TU, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# WWTR1
+FeaturePlot(jansky2021.TU, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# JUN
+FeaturePlot(jansky2021.TU, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL1
+FeaturePlot(jansky2021.TU, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL2
+FeaturePlot(jansky2021.TU, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "celltype")
+```
+
+<br>
+<br>
+
+#### __Analysis on sample NB02__
+
+```{r NB02,  fig.height=5, fig.width=20}
+jansky2021.NB02 <- subset(jansky2021,subset = patientID == "NB02")
+
+features <- c("YAP1","WWTR1","JUN","FOSL1","FOSL2")
+
+# YAP1
+FeaturePlot(jansky2021.NB02, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# WWTR1
+FeaturePlot(jansky2021.NB02, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# JUN
+FeaturePlot(jansky2021.NB02, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL1
+FeaturePlot(jansky2021.NB02, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL2
+FeaturePlot(jansky2021.NB02, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "celltype")
+
+```
+
+<br>
+<br>
+
+#### __Analysis on sample NB13__
+
+
+```{r NB13,  fig.height=5, fig.width=20}
+jansky2021.NB13 <- subset(jansky2021,subset = patientID == "NB13")
+
+# YAP1
+FeaturePlot(jansky2021.NB13, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# WWTR1
+FeaturePlot(jansky2021.NB13, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# JUN
+FeaturePlot(jansky2021.NB13, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL1
+FeaturePlot(jansky2021.NB13, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL2
+FeaturePlot(jansky2021.NB13, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "celltype")
+```
+
+<br>
+<br>
+
+#### __Analysis on sample NB14__
+
+
+```{r NB14,  fig.height=5, fig.width=20}
+jansky2021.NB14 <- subset(jansky2021,subset = patientID == "NB14")
+
+# YAP1
+FeaturePlot(jansky2021.NB14, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# WWTR1
+FeaturePlot(jansky2021.NB14, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# JUN
+FeaturePlot(jansky2021.NB14, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL1
+FeaturePlot(jansky2021.NB14, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "celltype")
+
+# FOSL2
+FeaturePlot(jansky2021.NB14, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "celltype")
+```
+
+<br>
+<br>
+<br>
+
+## 2. Fetahu et al., 2023
+
+Stage M NB BM metastasis at diagnosis dataset. This dataset includes 11x stage M
+NB patients and 5 non-DTC-infiltrated BM samples. No MES-like tumor cells were
+found in the publication.
+
+
+```{r libs, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(monocle3)
+library(scuttle)
+library(tidyverse)
+```
+
+```{r parameters, warning=FALSE, include=FALSE}
+source("/home/out/CancReg/scRNA-seq_stage_M/results/published/scripts/csbg-neuroblastoma-d976641/styling.R")
+source("/home/out/CancReg/scRNA-seq_stage_M/results/published/scripts/csbg-neuroblastoma-d976641/common_functions.R")
+```
+
+<br>
+
+Re-creating Figure 1, B from the publication
+
+```{r fig.height=10, fig.width=10}
+knitr::include_graphics("/home/sara_wz/CancReg_project/scRNA.scATAC/data/Fetahu2023_Figure1B.png") 
+```
+<br>
+
+```{r fetahu2023}
+fetahu2023.metadata <- readRDS(file="/home/out/CancReg/scRNA-seq_stage_M/results/published/data/metadata.rds")
+
+fetahu2023 <- readRDS(file="/home/out/CancReg/scRNA-seq_stage_M/results/published/data/rna_decontaminated.rds") %>%
+  logNormCounts(assay.type = "soupx_counts")
+colData(fetahu2023) <-
+  fetahu2023.metadata %>%
+  mutate(Size_Factor = colData(fetahu2023)$Size_Factor) %>% 
+  column_to_rownames("cell") %>% 
+  as("DataFrame")
+rowData(fetahu2023)[["gene_short_name"]] <- rownames(fetahu2023)
+
+# Convert to Seurat object
+fetahu2023_s <- as.Seurat(fetahu2023)
+
+# UMAP plot (as in the publication Figure 1, B)
+plot_umap <- function() {
+  adjust_positions <- tribble(
+    ~label, ~dx, ~dy,
+    "13", 1.5, -0.5,
+    "14", -1, -1,
+    "15", 0, 1,
+    "16", 0, 0.5,
+    "17", 0, 1,
+    "18", -1.2, 0,
+    "19", 1, 0,
+    "20", 1, 0,
+    "21", -.5, 1
+  )
+
+  cluster_labels <-
+    fetahu2023.metadata %>%
+    group_by(label = cluster_50) %>%
+    summarise(
+      umap_1_monocle = mean(umap_1_monocle),
+      umap_2_monocle = mean(umap_2_monocle)
+    ) %>%
+    left_join(adjust_positions, by = "label") %>%
+    mutate(
+      label = as_factor(label),
+      umap_1_monocle = umap_1_monocle + replace_na(dx, 0),
+      umap_2_monocle = umap_2_monocle + replace_na(dy, 0)
+    )
+
+  p <-
+    fetahu2023.metadata %>%
+    ggplot(aes(umap_1_monocle, umap_2_monocle)) +
+    geom_point(
+      aes(color = cellont_abbr),
+      size = .001,
+      shape = 16,
+      show.legend = FALSE
+    ) +
+    geom_text(
+      data = cluster_labels,
+      aes(label = label),
+      size = BASE_TEXT_SIZE_MM
+    ) +
+    scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
+    scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
+    scale_color_manual(values = CELL_TYPE_COLORS) +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.margin = margin(),
+      panel.border = element_blank(),
+      plot.background = element_blank()
+    )
+
+  p
+}
+
+plot_umap()
+
+fetahu2023_s@meta.data
+```
+
+<br>
+
+UMAP grouped per INSS stage to see the contribution of each sample group 
+to the tumor cluster
+
+```{r fetahu2023 per stage, fig.height=10, fig.width=20}
+# Group per INSS stage
+DimPlot(fetahu2023_s, split.by = "group")
+```
+
+<br>
+
+UMAP grouped per sample ID to see the contribution of each sample to the 
+tumor cluster
+
+
+```{r fetahu2023 per patient, fig.height=5, fig.width=60}
+# Group per sample ID
+DimPlot(fetahu2023_s, split.by = "sample")
+```
+
+<br>
+<br>
+
+### __Analysis on all clusters__
+
+```{r fetahu2023 plots all, fig.height=20, fig.width=15}
+library(viridis)
+
+pal <- viridis(n = 10, option = "C", direction = -1)
+
+FeaturePlot(fetahu2023_s, 
+            features = c("YAP1", "WWTR1","JUN", "FOSL1","FOSL2"), 
+            cols = pal, order = T)
+```
+
+<br>
+
+```{r fetahu2023 plots split, fig.height=5, fig.width=60}
+# YAP1
+FeaturePlot(fetahu2023_s, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "sample")
+
+# WWTR1
+FeaturePlot(fetahu2023_s, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "sample")
+
+# JUN
+FeaturePlot(fetahu2023_s, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "sample")
+
+# FOSL1
+FeaturePlot(fetahu2023_s, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "sample")
+
+# FOSL2
+FeaturePlot(fetahu2023_s, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "sample")
+```
+
+<br>
+<br>
+
+### __Analysis on the tumor cluster only__
+
+```{r fetahu2023 tumor cells, fig.height=5, fig.width=40}
+fetahu2023_tumorCells <- subset(fetahu2023_s,subset = cluster_50 == 8)
+fetahu2023_tumorCells@meta.data
+
+DimPlot(fetahu2023_tumorCells, split.by = "sample")
+
+# YAP1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "sample")
+
+# WWTRt1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "sample")
+
+# JUN
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "sample")
+
+# FOSL1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "sample")
+
+# FOSL2
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "sample")
+```
+
+<br>
+<br>
+
+#### __Analysis NB sub-types__
+
+Group II: MYCN amplified stage M tumors
+<br>
+Group III: ATRX mutated/delated stage M tumors
+<br>
+Group IV: Sporadic stage M tumors (MYCN WT, ATRX WT)
+
+```{r fetahu2023 tumor cells 2, fig.height=5, fig.width=15}
+# YAP1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "YAP1", 
+            cols = pal, order = T,split.by = "group")
+
+# WWTR1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "WWTR1", 
+            cols = pal, order = T,split.by = "group")
+
+# JUN
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "JUN", 
+            cols = pal, order = T,split.by = "group")
+
+# FOSL1
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "FOSL1", 
+            cols = pal, order = T,split.by = "group")
+
+# FOSL2
+FeaturePlot(fetahu2023_tumorCells, 
+            features = "FOSL2", 
+            cols = pal, order = T,split.by = "group")
+```
+
+<br>
+<br>
+<br>
+
+## 3. Yuan et al., 2022
+
+In this paper they show NB1, NB4, GNB3, GNB4 and GN1 samples to have >75% 
+MES-like tumor cells.
+
+
+```{r Yuan2022}
+
+metadata <- read.csv("/home/data/nb_tumors/yuan2022.scRNA/metadata/yuan2022_metadata.txt")
+# scRNA-seq
+path = '/home/data/nb_tumors/yuan2022.scRNA/raw_data/'
+
+samples <- list.files(path = path, recursive = F, full.names = F)
+samples
+
+setwd(path)
+for(x in samples){
+  name <- gsub('_UMI_COUNTS_RAW.txt','', x)
+  file <- paste0(path,x)
+  print(name)
+  cts <- read.table(file)
+  # create seurat objects
+  assign(name, CreateSeuratObject(counts = cts))
+}
+```
+
+
+
+```{r Yuan2022 basic analysis}
+GSM5768743_NB1@meta.data$orig.ident = "NB1"
+GSM5768744_NB2@meta.data$orig.ident = "NB2"
+GSM5768745_NB3@meta.data$orig.ident = "NB3"
+GSM5768746_NB4@meta.data$orig.ident = "NB4"
+GSM5768747_NB5@meta.data$orig.ident = "NB5"
+GSM5768748_GNB1@meta.data$orig.ident = "GNB1"
+GSM5768749_GNB2@meta.data$orig.ident = "GNB2"
+GSM5768750_GNB3@meta.data$orig.ident = "GNB3"
+GSM5768751_GNB4@meta.data$orig.ident = "GNB4"
+GSM5768752_GN1@meta.data$orig.ident = "GN1"
+
+
+sample.list <- c(GSM5768743_NB1,GSM5768744_NB2, GSM5768745_NB3,
+                 GSM5768746_NB4,GSM5768747_NB5,GSM5768748_GNB1,
+                 GSM5768749_GNB2,GSM5768750_GNB3,GSM5768751_GNB4,
+                 GSM5768752_GN1)
+
+# Individual analysis for each sample
+Yuan2022 <- lapply(X = sample.list, FUN = function(x) {
+  x <- subset(x, subset = nCount_RNA > 100)
+  x <- NormalizeData(x)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+  x <- ScaleData(x)
+  x <- RunPCA(x, features = VariableFeatures(object = x))
+  x <- FindNeighbors(x, reduction = "pca", dims = 1:10)
+  x <- FindClusters(x, resolution = 0.5)
+  x <- RunUMAP(x, reduction = "pca", dims = 1:10)
+})
+```
+
+
+```{r Yuan2022 integration}
+sample.list <- lapply(X = sample.list, FUN = function(x) {
+    x <- NormalizeData(x)
+    x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+
+features <- SelectIntegrationFeatures(object.list = sample.list)
+anchors <- FindIntegrationAnchors(object.list = sample.list, 
+                                  anchor.features = features)
+Yuan2022.combined <- IntegrateData(anchorset = anchors)
+
+DefaultAssay(Yuan2022.combined) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+Yuan2022.combined <- ScaleData(Yuan2022.combined, verbose = FALSE)
+Yuan2022.combined <- RunPCA(Yuan2022.combined, npcs = 30, verbose = FALSE)
+Yuan2022.combined <- RunUMAP(Yuan2022.combined, reduction = "pca", dims = 1:30)
+Yuan2022.combined <- FindNeighbors(Yuan2022.combined, reduction = "pca", dims = 1:30)
+Yuan2022.combined <- FindClusters(Yuan2022.combined, resolution = 0.5)
+
+# Visualization
+DimPlot(Yuan2022.combined, reduction = "umap", group.by = "orig.ident")
+
+```
+
+
+```{r Yuan2022 plots all, fig.height=20, fig.width=10}
+library(viridis)
+
+pal <- viridis(n = 10, option = "C", direction = -1)
+
+FeaturePlot(Yuan2022.combined, features = c("YAP1", "WWTR1","JUN", "FOSL1","FOSL2"), 
+              cols = pal, order = T,label = T)
+```
+
+
+```{r Yuan2022 plots per patient, fig.height=20, fig.width=10}
+library(viridis)
+
+pal <- viridis(n = 10, option = "C", direction = -1)
+
+FeaturePlot(Yuan2022.combined, features = c("YAP1", "WWTR1","JUN", "FOSL1","FOSL2"), 
+              cols = pal, order = T,label = T)
+```
+
+<br>
+
+#### Copy number variation analysis 
+
+Using inferCNV tool
+
+```{r infercnv}
+library(infercnv)
+
+```
+
+
+

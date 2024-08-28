@@ -1,0 +1,1848 @@
+---
+title: "MES-like NB tumor cells with Sören S."
+author: "Sara Wernig-Zorc"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    collapsed: no
+    code_folding: hide
+    highlight: pygments
+    theme: spacelab
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
+params:
+  input: "/home/rstudio/mnt_data/"
+  out: "/home/rstudio/mnt_out/"
+  data: "/home/rstudio/mnt_data/"
+  nb_tumors: "/home/rstudio/mnt_nb_tumors/"
+  GO_db: "/home/rstudio/mnt_resources/GSEA_GeneSetEnrichments/"
+  markers: "/home/rstudio/mnt_resources/MES_ADRN/"
+---
+
+```{r setup, include=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      tidy = TRUE, 
+                      error = FALSE, 
+                      messages = FALSE,
+                      warning = FALSE)
+
+library(parallel)
+future::plan(strategy = 'future::multicore', workers = 20)
+options(future.globals.maxSize = 8 * 10^9)
+
+print(params)
+
+
+source("/home/rstudio/scRNA.scATAC/Rmd/MES_project/MES_project_setup.R")
+```
+
+```{r R packages: load}
+#install.packages("Matrix", repos = "http://R-Forge.R-project.org")
+
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(SeuratWrappers))
+suppressPackageStartupMessages(library(SeuratData))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(scCustomize))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(SCpubr))
+suppressPackageStartupMessages(library(ggVennDiagram))
+```
+
+# __Patel et al., 2024__
+
+```{r eval=FALSE, include=FALSE}
+# loading the Robject with only tumor cells 
+# defined by the authors based on inferCNV
+patel2024 <- load(file = paste0(params$nb_tumors,"/patel2024.scRNA/data/scRNA-seq/2020_08_18_all_Malignant_batchcorrect_liger_k12.Rda"))
+patel2024@meta.data
+  # annotate_refine_1
+  # Age
+  # Gender
+  # MYCN
+  # ALK
+  # INSS_Stage
+  # INRGSS_Stage
+  # Treatment_Status
+
+table(patel2024@meta.data$SingleR.cell.labels)
+
+saveRDS(patel2024, file = paste0(params$nb_tumors,"/patel2024.scRNA/data/scRNA-seq/patel2024_NB_cluster.Rds"))
+```
+
+```{r eval=FALSE, include=FALSE}
+whole_dataset <- readRDS(file = paste0(params$nb_tumors,"/patel2024.scRNA/data/scRNA-seq/20220117_final_HTAPP_neuroblastoma_LIGER.Rds"))
+```
+
+```{r}
+patel2024 <- readRDS(file = paste0(params$nb_tumors,"/patel2024.scRNA/data/scRNA-seq/patel2024_NB_cluster.Rds"))
+
+Idents(patel2024) <- patel2024@meta.data$liger_clusters
+
+#patel2024 <- RenameIdents(patel2024, # DO NOT RENAME THEM, LEAVE CLUSTER NUMBERS
+#                    "1" = "SMYP (1)",
+#                    "2" = "ADRN (2)",
+#                    "3" = "ADRN (3)",
+#                    "4" = "MES (4)",
+#                    "5" = "ADRN (5)",
+#                    "6" = "MES (6)",
+#                    "7" = "ADRN (7)",
+#                    "8" = "ADRN (8)", 
+#                    "9" = "ADRN (9)",
+#                    "10"= "ADRN (10)",
+#                    "11"= "MES (11)",
+#                    "12"= "ADRN (12)")
+
+DimPlot(patel2024, seed = 2805, 
+        cols = COLOR_CODE_CLUST, 
+        raster = TRUE,
+        shuffle = TRUE,
+        label.size = 16)
+
+pdf(file = paste0(params$out,"patel2024/figures/patel2024_UMAP_tumorCells.pdf"), 
+    height = 7, width = 8)
+DimPlot(patel2024, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST, 
+        raster = FALSE,
+        shuffle = TRUE,
+        label.size = 36)
+dev.off()
+
+pdf(file = paste0(params$out,"patel2024/figures/patel2024_UMAP_tumorCells_raster_TRUE.pdf"), 
+    height = 7, width = 8)
+DimPlot(patel2024, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST, 
+        raster = TRUE,
+        shuffle = TRUE,
+        label.size = 36)
+dev.off()
+
+pdf(file = paste0(params$out,"patel2024/figures/patel2024_UMAP_tumorCells_raster_TRUE_v2.pdf"), 
+    height = 7, width = 8)
+DimPlot(patel2024, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST_v2, 
+        raster = TRUE,
+        shuffle = TRUE,
+        label.size = 36)
+dev.off()
+
+
+png(file = paste0(params$out,"patel2024/figures/patel2024_UMAP_tumorCells_v2.png"),
+    height = 700, width = 800,res = 200)
+DimPlot(patel2024, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST_v2, 
+        raster = FALSE,
+        shuffle = TRUE,
+        label.size = 40)
+dev.off()
+
+
+
+
+png(file = paste0(params$out,"patel2024/figures/patel2024_UMAP_tumorCells.png"),
+    height = 700, width = 800,res = 200)
+DimPlot(patel2024, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST, 
+        raster = FALSE,
+        shuffle = TRUE,
+        label.size = 40)
+dev.off()
+
+```
+
+In the pre-print Patel et al., 2024 they show clusters 4, 6 and 11 as MES,
+cluster 1 is SYM and the rest are ADRN
+
+The dataset contains scRNA-seq (n=13 tumors; 84,769 cells) and 
+snRNA-seq (n=43 tumors; 445,286 nuclei) samples
+
+## ___MES/ADR gene list___
+
+```{r fig.height=5, fig.width=5}
+genes_of_interest <- c("YAP1","WWTR1","JUN","FOSL1","FOSL2")
+dotplot_genes <- c("FN1","VIM","CD44",
+                   "PHOX2B","DBH",
+                   "SOX10","S100B",
+                   "YAP1","WWTR1",
+                   "JUN","FOSL1","FOSL2")
+dotplot_genes_v2 <- c("FN1","VIM","CD44",
+                   "PHOX2B","DBH",
+                   "YAP1","WWTR1",
+                   "JUN","FOSL1","FOSL2")
+dotplot_genes_v3 <- c("FN1","VIM","CD44",
+                   "PHOX2B","DBH",
+                   "SOX10","S100B","PLP1",
+                   "YAP1","WWTR1",
+                   "JUN","FOSL1","FOSL2")
+
+dotplot_genes_v4 <- c("FN1","VIM","CD44",
+                   "PHOX2B","DBH",
+                   "SOX10","PLP1",
+                   "YAP1","WWTR1",
+                   "JUN","FOSL1","FOSL2")
+
+
+core_ADR_markers <-  c("PHOX2B","DBH","GATA3","TH")
+core_MES_markers <- c("CD44","VIM","FN1","COL4A1")
+core_SYM_markers <- c("MKI67","TOP2A")
+
+# Typical MES/ADR markers
+MES_markers <- 
+  read.table(file = paste0(params$markers,"/MES_markers.txt"),
+             sep = "\t", header=FALSE, row.names=1)
+MES_markers <- MES_markers$V2
+
+ADR_markers <- 
+  read.table(file = paste0(params$markers,"/ADRN_markers.txt"),
+             sep = "\t", header=FALSE, row.names=1)
+ADR_markers <- ADR_markers$V2
+
+# MES/ADR markers from Thirant et al., 2023 (from NB patients)
+thirant2023_MES_genes <- 
+  read.table(file = paste0(params$markers,"thirant2023_MES_all_genes_patients.txt"),
+             sep = "\t", header=FALSE, quote = "")
+thirant2023_MES_genes <- as.list(thirant2023_MES_genes)
+
+thirant2023_ADR_SYM_genes <- 
+  read.table(file = paste0(params$markers,"thirant2023_ADR_SYM_genes_patients.txt"),
+             sep = "\t", header=FALSE)
+thirant2023_ADR_SYM_genes <- as.list(thirant2023_ADR_SYM_genes)
+
+thirant2023_ADR_CHR_genes <- 
+  read.table(file = paste0(params$markers,"thirant2023_ADR_CHRO_genes_patients.txt"),
+             sep = "\t", header=FALSE)
+thirant2023_ADR_CHR_genes <- as.list(thirant2023_ADR_CHR_genes)
+
+# MES/ADR markers from cell lines (bulk RNA-seq data from Sören)
+soren2024_MES_genes <- 
+  read.table(file = paste0(params$markers,"DEGs_NB_cell_lines_MES_specific_genes.txt"),
+             sep = "\t", header=FALSE)
+soren2024_MES_genes <- as.list(soren2024_MES_genes)
+
+soren2024_ADR_genes <- 
+  read.table(file = paste0(params$markers,"DEGs_NB_cell_lines_ADR_specific_genes.txt"),
+             sep = "\t", header=FALSE)
+soren2024_ADR_genes <- as.list(soren2024_ADR_genes)
+
+# MES/ADR markers from cell lines (bulk RNA-seq data from Sören)
+# fold change above 3.3 (-3.3 for ADR genes)
+soren2024_MES_genes_v2 <- 
+  read.table(file = paste0(params$markers,"strohmenger2024_MES_markers_from_NB_cell_lines_foldchange+10.txt"),
+             sep = "\t", header=FALSE)
+soren2024_MES_genes_v2 <- as.list(soren2024_MES_genes_v2)
+
+soren2024_ADR_genes_v2 <- 
+  read.table(file = paste0(params$markers,"strohmenger2024_ADR_markers_from_NB_cell_lines_foldchange-10.txt"),
+             sep = "\t", header=FALSE)
+soren2024_ADR_genes_v2 <- as.list(soren2024_ADR_genes_v2)
+
+# MES/ADR markers from cell lines (bulk RNA-seq data from Sören)
+# log2 fold change above 5 (-5 for ADR genes)
+
+soren2024_MES_genes_v3 <- 
+  read.table(file = paste0(params$markers,"strohmenger2024_MES_markers_from_NB_cell_lines_log2FC+5.txt"),
+             sep = "\t", header=FALSE)
+soren2024_MES_genes_v3 <- as.list(soren2024_MES_genes_v3)
+
+soren2024_ADR_genes_v3 <- 
+  read.table(file = paste0(params$markers,"strohmenger2024_ADR_markers_from_NB_cell_lines_log2FC-5.txt"),
+             sep = "\t", header=FALSE)
+soren2024_ADR_genes_v3 <- as.list(soren2024_ADR_genes_v3)
+
+
+# Gene list from Boeva et al., 2021
+boeva2021_ADR_genes <- c("PHOX2B","GATA3","HAND2","HAND1","KLF7","ISL1","PHOX2A")
+                  
+boeva2021_NCC_genes <- c("NR3C1","BHLHE41","MAFF","GLIS3","IRF1","IRF2","IRF3",
+                        "FLI1","MEF2D","PRRX1","RUNX1","RUNX2","TBX18","FOSL1",
+                        "FOSL2")
+
+# Gene list from Van Groeningen et al., 2017
+vangroningen2017_ADR_genes <- 
+  read.table(paste0(params$markers,"vangroningen2017_ADR_genes.txt"),
+                          header = FALSE, quote = "")
+vangroningen2017_ADR_genes <- as.list(vangroningen2017_ADR_genes)
+vangroningen2017_MES_genes <- 
+  read.csv(paste0(params$markers,"vangroningen2017_MES_genes.txt"),
+                          header = FALSE, quote = "")
+vangroningen2017_MES_genes <- as.list(vangroningen2017_MES_genes)
+
+gene.lists <- list("genes_of_interest" = genes_of_interest,
+                "core_ADR_markers" = core_ADR_markers,
+                "core_MES_markers" = core_MES_markers,
+                "core_SYM_markers" = core_SYM_markers,
+                "MES_markers" = MES_markers,
+                "ADR_markers" = ADR_markers,
+                "thirant2023_MES_genes" = thirant2023_MES_genes$V1,
+                "thirant2023_ADR_SYM_genes" = thirant2023_ADR_SYM_genes$V1,
+                "thirant2023_ADR_CHR_genes" = thirant2023_ADR_CHR_genes$V1,
+                "soren2024_MES_genes" = soren2024_MES_genes$V1,
+                "soren2024_ADR_genes" = soren2024_ADR_genes$V1,
+                "boeva2021_ADR_genes" = boeva2021_ADR_genes,
+                "boeva2021_NCC_genes" = boeva2021_NCC_genes,
+                "vangroningen2017_ADR_genes" = vangroningen2017_ADR_genes$V1,
+                "vangroningen2017_MES_genes" = vangroningen2017_MES_genes$V1)
+
+```
+
+
+# ___Gene list overlaps: all DEGs___
+
+```{r Venn diagram ADR fig.height=5, fig.width=10}
+# overlap between published ADR gene lists 
+# and the new gene list in this publication
+ADR_gene_lists <- list(vangroningen2017 = vangroningen2017_ADR_genes$V1, 
+                       strohmenger2024 = soren2024_ADR_genes$V1,
+                       boeva2021 = boeva2021_ADR_genes)
+
+pdf(file = paste0(params$out,"patel2024/figures/ADR_gene_lists_overlap.pdf"),
+    height = 5, width = 10)
+ggVennDiagram(ADR_gene_lists, set_size = 6, label_alpha = 0,label_size = 6,
+  category.names = c("Van Groningen","Strohmenger","Boeva"),
+  edge_size = 1, label_percent_digit = 1,label_color = "white") +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue") +
+  labs(title = "\t \t \t \t \t \t \t \t \t Overlap of ADR gene lists") + 
+  theme(title = element_text(size = 16),legend.text = element_text(size = 14)) +
+  scale_x_continuous(expand = expansion(mult = .2))
+dev.off()
+
+ADR_gene_lists_v2 <- list(vangroningen2017 = vangroningen2017_ADR_genes$V1, 
+                       strohmenger2024 = soren2024_ADR_genes$V1,
+                       boeva2021 = boeva2021_ADR_genes,
+                       thirant2023a = thirant2023_ADR_SYM_genes$V1,
+                       thirant2023b = thirant2023_ADR_CHR_genes$V1)
+
+
+ggVennDiagram(ADR_gene_lists_v2,  set_size = 8, 
+              label_alpha = 0, label_size = 8,
+  category.names = c("vangroningen2017","strohmenger2024","boeva2021",
+                     "thirant2023a","thirant2023b")) +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue")  +
+  labs(title = "\t \t \t \t Overlap of ADR gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .4))
+```
+
+```{r Venn diagram MES fig.height=5, fig.width=10}
+# overlap between published MES gene lists 
+# and the new gene list in this publication
+MES_gene_lists <- list(vangroningen2017 = vangroningen2017_MES_genes$V1, 
+                       strohmenger2024 = soren2024_MES_genes$V1,
+                       boeva2021 = boeva2021_NCC_genes)
+
+pdf(file = paste0(params$out,"patel2024/figures/MES_gene_lists_overlap.pdf"),
+    height = 5, width = 10)
+ggVennDiagram(MES_gene_lists, set_size = 6, label_alpha = 0,label_size = 6,
+  category.names = c("Van Groningen","Strohmenger","Boeva"),
+  edge_size = 1, label_percent_digit = 1,label_color = "white") +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue") +
+  labs(title = "\t \t \t \t \t \t \t \t \t Overlap of MES gene lists") + 
+  theme(title = element_text(size = 16),legend.text = element_text(size = 14)) +
+  scale_x_continuous(expand = expansion(mult = .2))
+dev.off()
+
+MES_gene_lists_v2 <- list(vangroningen2017 = vangroningen2017_MES_genes$V1, 
+                       strohmenger2024 = soren2024_MES_genes$V1,
+                       boeva2021 = boeva2021_NCC_genes,
+                       thirant2023a = thirant2023_MES_genes$V1)
+
+
+ggVennDiagram(MES_gene_lists_v2,  set_size = 8, 
+              label_alpha = 0, label_size = 8,
+  category.names = c("vangroningen2017","strohmenger2024","boeva2021",
+                     "thirant2023")) +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue")  +
+  labs(title = "\t \t \t \t Overlap of MES gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .4))
+```
+
+# ___Gene list overlaps: top DEGs___
+
+```{r set cut-off for DEGs}
+cell_type_MES_vs_ADR <- 
+  read_excel(paste0(params$markers,"cell_type_MES_vs_ADR.xlsx"))
+
+# setting a cut-off for DEGs
+png(file = paste0(params$out,"/patel2024/figures/DEGs_log2FC_distribution_histogram.png"))
+hist(cell_type_MES_vs_ADR$log2FoldChange,
+     plot = TRUE,
+     n=100,
+     col = "darkgreen", 
+     main = "Distribution of log2 fold changes (significant)")
+abline(v = -2,col="lightblue",lwd=2)
+abline(v = 2,col="lightblue",lwd=2)
+abline(v = -3.3,col="darkblue",lwd=2)
+abline(v = 3.3,col="darkblue",lwd=2)
+abline(v = -5,col="purple",lwd=2)
+abline(v = 5,col="purple",lwd=2)
+dev.off()
+```
+
+```{r Venn diagram ADR fig.height=5, fig.width=10}
+# overlap between published ADR gene lists 
+# and the new gene list in this publication
+ADR_gene_lists <- list(vangroningen2017 = vangroningen2017_ADR_genes$V1, 
+                       strohmenger2024 = soren2024_ADR_genes_v2$V1,
+                       boeva2021 = boeva2021_ADR_genes)
+
+pdf(file = paste0(params$out,"patel2024/figures/ADR_gene_lists_overlap.pdf"),
+    height = 5, width = 10)
+ggVennDiagram(ADR_gene_lists, set_size = 8, label_alpha = 0,label_size = 8,
+  category.names = c("Van Groningen","Strohmenger","Boeva"),
+  edge_size = 1, label_percent_digit = 1,label_color = "white") +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue") +
+  labs(title = "\t \t \t \t \t \t \t Overlap of ADR gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .3))
+dev.off()
+
+ADR_gene_lists_v2 <- list(vangroningen2017 = vangroningen2017_ADR_genes$V1, 
+                       strohmenger2024 = soren2024_ADR_genes_v2$V1,
+                       boeva2021 = boeva2021_ADR_genes,
+                       thirant2023a = thirant2023_ADR_SYM_genes$V1,
+                       thirant2023b = thirant2023_ADR_CHR_genes$V1)
+
+
+ggVennDiagram(ADR_gene_lists_v2,  set_size = 8, 
+              label_alpha = 0, label_size = 8,
+  category.names = c("vangroningen2017","strohmenger2024","boeva2021",
+                     "thirant2023a","thirant2023b")) +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue")  +
+  labs(title = "\t \t \t \t Overlap of ADR gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .4))
+```
+
+```{r Venn diagram MES fig.height=5, fig.width=10}
+# overlap between published MES gene lists 
+# and the new gene list in this publication
+MES_gene_lists <- list(vangroningen2017 = vangroningen2017_MES_genes$V1, 
+                       strohmenger2024 = soren2024_MES_genes_v2$V1,
+                       boeva2021 = boeva2021_NCC_genes)
+
+pdf(file = paste0(params$out,"patel2024/figures/MES_gene_lists_overlap.pdf"),
+    height = 5, width = 10)
+ggVennDiagram(MES_gene_lists, set_size = 8, label_alpha = 0,label_size = 8,
+  category.names = c("Van Groningen","Strohmenger","Boeva"),
+  edge_size = 1, label_percent_digit = 1,label_color = "white") +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue") +
+  labs(title = "\t \t \t \t \t \t \t Overlap of MES gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .3))
+dev.off()
+
+MES_gene_lists_v2 <- list(vangroningen2017 = vangroningen2017_MES_genes$V1, 
+                       strohmenger2024 = soren2024_MES_genes_v2$V1,
+                       boeva2021 = boeva2021_NCC_genes,
+                       thirant2023a = thirant2023_MES_genes$V1)
+
+
+ggVennDiagram(MES_gene_lists_v2,  set_size = 8, 
+              label_alpha = 0, label_size = 8,
+  category.names = c("vangroningen2017","strohmenger2024","boeva2021",
+                     "thirant2023")) +
+  ggplot2::scale_fill_gradient(low="#B59410",high = "darkblue")  +
+  labs(title = "\t \t \t \t Overlap of MES gene lists") + 
+  theme(title = element_text(size = 20),legend.text = element_text(size = 18)) +
+  scale_x_continuous(expand = expansion(mult = .4))
+```
+
+# ___ADR/MES module scores___
+
+```{r filter gene lists}
+# extract counts
+counts <- LayerData(patel2024, assay="RNA", layer='data')
+var_genes <- dimnames(counts)[[1]]
+
+# remove genes not present in dataset
+soren2024_MES_genes <- intersect(soren2024_MES_genes$V1, var_genes)
+soren2024_ADR_genes <- intersect(soren2024_ADR_genes$V1, var_genes)
+MES_markers <- intersect(MES_markers, var_genes)
+ADR_markers <- intersect(ADR_markers, var_genes)
+
+thirant2023_MES_genes <- intersect(thirant2023_MES_genes$V1, var_genes)
+thirant2023_ADR_SYM_genes <- intersect(thirant2023_ADR_SYM_genes$V1, var_genes)
+thirant2023_ADR_CHR_genes <- intersect(thirant2023_ADR_CHR_genes$V1, var_genes)
+
+vangroningen2017_ADR_genes <- intersect(vangroningen2017_ADR_genes$V1, var_genes)
+vangroningen2017_MES_genes <- intersect(vangroningen2017_MES_genes$V1, var_genes)
+
+soren2024_MES_genes_v2 <- intersect(soren2024_MES_genes_v2$V1, var_genes)
+soren2024_ADR_genes_v2 <- intersect(soren2024_ADR_genes_v2$V1, var_genes)
+
+soren2024_ADR_genes_v3 <- intersect(soren2024_ADR_genes_v3$V1, var_genes)
+soren2024_MES_genes_v3 <- intersect(soren2024_MES_genes_v3$V1, var_genes)
+
+boeva2021_ADR_genes <- intersect(boeva2021_ADR_genes, var_genes)
+boeva2021_NCC_genes <- intersect(boeva2021_NCC_genes, var_genes)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# loop through different lists and add module score to the Seurat object
+for (name in names(gene.lists)) {
+  print(paste0("Processing list: ", name))
+  for (i in 1:length(gene.lists)) {
+    #print(gene.lists[i])
+    patel2024 <- AddModuleScore(patel2024,
+                             features = gene.lists[i],
+                             #ctrl = 25,
+                             name = name,
+                             seed = 28)
+  }
+}
+```
+
+```{r generate moduleScore}
+patel2024 <- AddModuleScore(patel2024,
+                         features = genes_of_interest,
+                         name = "genes_of_interest",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = core_ADR_markers,
+                         name = "core_ADR_markers",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = core_MES_markers,
+                         name = "core_MES_markers",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = core_SYM_markers,
+                         name = "core_SYM_markers",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = MES_markers,
+                         name = "MES_markers",         
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = ADR_markers,
+                         name = "ADR_markers",           
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = thirant2023_MES_genes,
+                         name = "thirant2023_MES_genes",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = thirant2023_ADR_SYM_genes,
+                         name = "thirant2023_ADR_SYM_genes",
+                         seed = 28)           
+#patel2024 <- AddModuleScore(patel2024,
+#                         features = thirant2023_ADR_CHR_genes,
+#                         name = "thirant2023_ADR_CHR_genes",
+#                         seed = 28)       #Error in features[[i]] : subscript out of bounds     
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_MES_genes,
+                         name = "soren2024_MES_genes",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_ADR_genes,
+                         name = "soren2024_ADR_genes",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_MES_genes_v2,
+                         name = "soren2024_MES_genes_v2",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_ADR_genes_v2,
+                         name = "soren2024_ADR_genes_v2",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_MES_genes_v3,
+                         name = "soren2024_MES_genes_v3",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = soren2024_ADR_genes_v3,
+                         name = "soren2024_ADR_genes_v3",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = boeva2021_NCC_genes,
+                         name = "boeva2021_NCC_genes",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = boeva2021_ADR_genes,
+                         name = "boeva2021_ADR_genes",
+                         seed = 28)
+
+patel2024 <- AddModuleScore(patel2024,
+                         features = vangroningen2017_ADR_genes,
+                         name = "vangroningen2017_ADR_genes",
+                         seed = 28)
+patel2024 <- AddModuleScore(patel2024,
+                         features = vangroningen2017_MES_genes,
+                         name = "vangroningen2017_MES_genes",
+                         seed = 28)
+```
+
+## ___ADR/MES Module score plots___
+
+```{r plot moduleScores: thirant}
+
+#### Thirant et al., 2023 ####
+
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_thirant2023_MES_genes.pdf"),
+    height = 5, width = 5)
+FeaturePlot(patel2024, 
+            features = "thirant2023_MES_genes1", 
+            col = c("gray","orange","red"),
+            order=TRUE,
+            pt.size = 2, 
+            label = FALSE,
+            label.size = 12)          
+
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_thirant2023_ADR_SYM_genes.pdf"), 
+    height = 5, width = 5)
+FeaturePlot(patel2024, 
+            features = "thirant2023_ADR_SYM_genes1", 
+            col = c("gray","orange","red"),
+            order=TRUE,
+            pt.size = 2, 
+            label = FALSE,
+            label.size = 12)
+dev.off()
+```
+
+```{r moduleScores: Boeva, fig.height=5, fig.width=4}
+
+#### Boeva et al., 2021 #####
+
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_Boeva2021_NCC_genes.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "boeva2021_NCC_genes1",
+               plot.title = "NCC gene module score",
+               plot.subtitle = "Boeva et al., 2021",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/ModuleScore_Boeva2021_NCC_genes.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "boeva2021_NCC_genes1",
+               plot.title = "NCC gene module score",
+               plot.subtitle = "Boeva et al., 2021",
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 40,
+               label.size = 40,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_Boeva2021_ADR_genes.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "boeva2021_ADR_genes1",
+               plot.title = "ADR gene module score",
+               plot.subtitle = "Boeva et al., 2021",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/ModuleScore_Boeva2021_ADR_genes.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "boeva2021_ADR_genes1",
+               plot.title = "ADR gene module score",
+               plot.subtitle = "Boeva et al., 2021",
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 40,
+               label.size = 40,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r plot moduleScores: Van Groeningen, fig.height=5, fig.width=4}
+#### Van Groeningen et al., 2017 ####
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_vangroningen2017_MES_genes_shuffle.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "vangroningen2017_ADR_genes1",
+               plot.title = "ADR gene module score",
+               plot.subtitle = "Van Groningen et al., 2017",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/ModuleScore_vangroningen2017_MES_genes.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "vangroningen2017_ADR_genes1",
+               plot.title = "ADR gene module score",
+               plot.subtitle = "Van Groningen et al., 2017",
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 40,
+               label.size = 40,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/ModuleScore_vangroningen2017_ADR_genes_shuffle.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "vangroningen2017_MES_genes1",
+               plot.title = "MES gene module score",
+               plot.subtitle = "Van Groningen et al., 2017",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/ModuleScore_vangroningen2017_ADR_genes.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "vangroningen2017_MES_genes1",
+               plot.title = "MES gene module score",
+               plot.subtitle = "Van Groningen et al., 2017",
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 40,
+               label.size = 40,
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r plot moduleScores: Sören-defined-markers, fig.height=5, fig.width=4}
+# using version 1 gene list
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_MES_genes1",
+               plot.title = "soren2024 MES genes",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.palette = "D",
+               viridis.direction = -1,
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_ADR_genes1",
+               plot.title = "soren2024 ADR genes",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+
+# Using version 2 gene list
+pdf(file = paste0(params$out, "/patel2024/figures/patel2024_moduleScore_Soren2024_MES_markers.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_MES_genes_v21",
+               plot.title = "soren2024 MES genes",
+               plot.subtitle = "DEGs with fold change > 10",
+            #   raster = TRUE,
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.palette = "D",
+               viridis.direction = -1,
+               font.size = 18,
+               label.size = 18,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_Soren2024_MES_markers_FINAL.png"), 
+    height = 5900, width = 6470, res = 400)
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_MES_genes_v21",
+               plot.title = "\t\t MES (this study)",
+               order = TRUE,
+               pt.size = 2,
+               viridis.palette = "D",
+               viridis.direction = -1,
+               font.size = 60,
+               label.size = 55,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "",
+               legend.width = 4,
+               legend.length = 20,
+               legend.position = "right")
+dev.off()
+
+pdf(file = paste0(params$out, "/patel2024/figures/patel2024_moduleScore_Soren2024_ADR_markers.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_ADR_genes_v21",
+               plot.title = "soren2024 ADR genes",
+               plot.subtitle = "DEGs with fold change < -10",
+                raster = TRUE,
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_Soren2024_ADR_markers_FINAL.png"), 
+    height = 5900, width = 6470, res = 400)
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_ADR_genes_v21",
+               plot.title = "\t\t ADR (this study)",
+               order = TRUE,
+               pt.size = 2,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 60,
+               label.size = 55,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "",
+               legend.width = 4,
+               legend.length = 20,
+               legend.position = "right")
+dev.off()
+
+# Using version 3 gene list
+
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_MES_genes_v31",
+               plot.title = "soren2024 MES genes",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.palette = "D",
+               viridis.direction = -1,
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+
+do_FeaturePlot(sample = patel2024, 
+               features = "soren2024_ADR_genes_v31",
+               plot.title = "soren2024 ADR genes",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+```
+
+```{r plot genes of interest}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_genes_of_interest.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "genes_of_interest1",
+               plot.title = "MES CRC factors",
+               plot.subtitle = "(YAP1, WWTR1, JUN, FOSL1, FOSL2)",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_MES_CRC_FINAL.png"), 
+    height = 5900, width = 6470, res = 400)
+do_FeaturePlot(sample = patel2024, 
+               features = "genes_of_interest1",
+               plot.title = "MES CRC factors",
+               plot.subtitle = "(YAP1, WWTR1, JUN, FOSL1, FOSL2)",
+               order = TRUE,
+               pt.size = 2,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 60,
+               label.size = 55,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "",
+               legend.position = "right",
+               legend.length = 20,
+               legend.width = 4)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_genes_of_interest_shuffle.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "genes_of_interest1",
+               plot.title = "Gene module score",
+               plot.subtitle = "YAP1, WWTR1, JUN, FOSL1 and FOSL2",
+           #   order = FALSE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 36,
+               label.size = 36,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r plot genes of interest with ordering by expression}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_genes_of_interest_wOrderingByExpression.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "genes_of_interest1",
+               plot.title = "Gene module score",
+               plot.subtitle = "YAP1, WWTR1, JUN, FOSL1 and FOSL2",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 14,
+               label.size = 14,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_moduleScore_genes_of_interest_wOrderingByExpression.png"), 
+    height = 500, width = 400)
+do_FeaturePlot(sample = patel2024, 
+               features = "genes_of_interest1",
+               plot.title = "Gene module score",
+               plot.subtitle = "YAP1, WWTR1, JUN, FOSL1 and FOSL2",
+               order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               font.size = 20,
+               label.size = 20,
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+```
+
+
+# ___Core MES genes: Gene expression___
+
+```{r fig.height=5, fig.width=4}
+# plot expression of individual genes
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_COL4A1.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "COL4A1",
+               plot.title = "core MES markers",
+               plot.subtitle = "COL4A1 gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 14,
+               label.size = 14,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_COL4A1.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "COL4A1",
+               plot.title = "core MES markers",
+               plot.subtitle = "COL4A1 gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 36,
+               label.size = 36,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+
+
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_FN1.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "FN1",
+               plot.title = "core MES markers",
+               plot.subtitle = "VIM gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 14,
+               label.size = 14,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_FN1.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "FN1",
+               plot.title = "core MES markers",
+               plot.subtitle = "VIM gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 40,
+               label.size = 40,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+
+
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_VIM.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "VIM",
+               plot.title = "core MES markers",
+               plot.subtitle = "VIM gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 14,
+               label.size = 14,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_VIM.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "VIM",
+               plot.title = "core MES markers",
+               plot.subtitle = "VIM gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 40,
+               label.size = 40,
+               legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_CD44.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "CD44",
+               plot.title = "core MES markers",
+               plot.subtitle = "CD44 gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 14,
+               label.size = 14,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_MES_markers_CD44.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "CD44",
+               plot.title = "core MES markers",
+               plot.subtitle = "CD44 gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 3,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+# ___Core ADR genes: Gene expression___
+
+```{r PHOX2B}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_PHOX2B.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "PHOX2B",
+               plot.title = "core ADR markers",
+               plot.subtitle = "PHOX2B gene expression",
+               order = TRUE,
+               raster = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 4,
+               font.size = 16,
+               label.size = 16,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"patel2024/figures/patel2024_core_ADR_markers_PHOX2B.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "PHOX2B",
+               plot.title = "core ADR markers",
+               plot.subtitle = "PHOX2B gene expression",
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+              max.cutoff = 4,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r DBH}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_DBH.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "DBH",
+               plot.title = "core ADR markers",
+               plot.subtitle = "DBH gene expression",
+               raster = TRUE,
+               order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 16,
+               label.size = 16,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_DBH.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "DBH",
+               plot.title = "core ADR markers",
+               plot.subtitle = "DBH gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r GATA3}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_GATA3.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "GATA3",
+               plot.title = "core ADR markers",
+               plot.subtitle = "GATA3 gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 14,
+               label.size = 14,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_GATA3.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "GATA3",
+               plot.title = "core ADR markers",
+               plot.subtitle = "GATA3 gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r TH}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_TH.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "TH",
+               plot.title = "core ADR markers",
+               plot.subtitle = "TH gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 1,
+               font.size = 14,
+               label.size = 14,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_ADR_markers_TH.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "TH",
+               plot.title = "core ADR markers",
+               plot.subtitle = "TH gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 1,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+# ___Core SYM genes: Gene expression___
+
+```{r MKI67}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_SYM_markers_MKI67.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "MKI67",
+               plot.title = "core SYM markers",
+               plot.subtitle = "MKI67 gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 1,
+               font.size = 14,
+               label.size = 14,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_SYM_markers_MKI67.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "MKI67",
+               plot.title = "core SYM markers",
+               plot.subtitle = "MKI67 gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 1,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+```{r TOP2A}
+pdf(file = paste0(params$out,"/patel2024/figures/patel2024_core_SYM_markers_TOP2A.pdf"), 
+    height = 5, width = 4)
+do_FeaturePlot(sample = patel2024, 
+               features = "TOP2A",
+               plot.title = "core SYM markers",
+               plot.subtitle = "TOP2A gene expression",
+               #order = TRUE,
+               pt.size = 0.25,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 14,
+               label.size = 14,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 10)
+dev.off()
+
+png(file = paste0(params$out,"/patel2024/figures/patel2024_core_SYM_markers_TOP2A.png"), 
+    height =2000, width =1600,res = 200)
+do_FeaturePlot(sample = patel2024, 
+               features = "TOP2A",
+               plot.title = "core SYM markers",
+               plot.subtitle = "TOP2A gene expression",
+               #order = TRUE,
+               pt.size = 0.5,
+               viridis.direction = -1,
+               viridis.palette = "D",
+               min.cutoff = 0, 
+               max.cutoff = 2,
+               font.size = 40,
+               label.size = 40,
+               #legend.title.face = "bold",
+               axis.text.face = "bold",
+               plot.title.face = "bold",
+               plot.axes = TRUE,
+               legend.title = "Gene expression",
+               legend.length = 20)
+dev.off()
+```
+
+
+# ___ViolinPlot and DotPlot___
+
+```{r eval=FALSE, include=FALSE}
+for (name in names(gene.lists)) {
+  print(paste0("Plotting module score for: ", name))
+  for (i in 1:length(gene.lists)) {
+    plot <- FeaturePlot(object = patel2024, 
+                        features = paste0(name,"1"), 
+                        col =  c("gray","orange","red"),
+                        order = TRUE)
+    print(plot)
+  }
+}
+```
+
+
+```{r dotplot module scores}
+
+module_scores_v0 <- c("Strohmenger2024 MES" ="soren2024_MES_genes_v21",
+                    "Strohmenger2024 ADR" = "soren2024_ADR_genes_v21")
+
+module_scores <- c("Strohmenger2024 MES" ="soren2024_MES_genes_v21",
+                    "Van Groeningen MES" = "vangroningen2017_MES_genes1",
+                    "Boeva NCC" =  "boeva2021_NCC_genes1",
+                    "Strohmenger2024 ADR" = "soren2024_ADR_genes_v21",
+                    "Van Groeningen ADR" = "vangroningen2017_ADR_genes1",
+                    "Boeva ADR" = "boeva2021_ADR_genes1")
+
+module_scores_v2 <- c("soren2024_MES_genes_v21","soren2024_ADR_genes_v21",
+                  "vangroningen2017_MES_genes1","vangroningen2017_ADR_genes1",
+                  "boeva2021_NCC_genes1","boeva2021_ADR_genes1",
+                  "thirant2023_MES_genes1","thirant2023_ADR_SYM_genes1")
+
+
+module_scores_v3 <- c("soren2024_MES_genes1","soren2024_ADR_genes1",
+                  "vangroningen2017_MES_genes1","vangroningen2017_ADR_genes1",
+                  "boeva2021_NCC_genes1","boeva2021_ADR_genes1")
+
+module_scores_v4 <- c("soren2024_MES_genes_v31","soren2024_ADR_genes_v31",
+                  "vangroningen2017_MES_genes1","vangroningen2017_ADR_genes1",
+                  "boeva2021_NCC_genes1","boeva2021_ADR_genes1")
+
+
+
+DotPlot(patel2024, 
+        features = module_scores,
+        cols = c("lightblue","red")) +
+        theme(axis.text.x = element_text(angle = 45,hjust=1, size = 16)) + 
+        RotatedAxis() + scale_size(range = c(1,8)) 
+
+
+DotPlot(patel2024, 
+        features = module_scores_v0,
+        cols = c("lightblue","red")) +
+        theme(axis.text.x = element_text(angle = 45,hjust=1, size = 16)) + 
+        RotatedAxis() + scale_size(range = c(3,8)) 
+
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = FALSE) 
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = TRUE) 
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores_v0,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                # exp_color_min = -1,
+                # exp_color_middle = 0,
+                # exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_feature = FALSE,
+                  cluster_ident = FALSE) 
+
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores_v2,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = FALSE) 
+
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v3,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = TRUE) 
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores_v3,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = FALSE) 
+
+Clustered_DotPlot(patel2024, 
+                  features = module_scores_v4,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v2,
+                  exp_color_min = -1,
+                  exp_color_middle = 0,
+                  exp_color_max = 1,
+                  row_label_size = 10,
+                  column_label_size = 10,
+                  legend_label_size = 10,
+                  x_lab_rotate = 90,
+                  legend_title_size = 10,
+                  cluster_ident = FALSE) 
+
+```
+
+```{r violin plots}
+pdf(file = paste0(params$out,"/patel2024/ViolinPlot_GenesOfInterest.pdf"), 
+    height = 15, width = 20)
+VlnPlot(patel2024, 
+        features = dotplot_genes, 
+        log = TRUE, pt.size = 0)
+dev.off()
+```
+
+# ___Dotplots___
+
+```{r dotplot}
+pdf(file = paste0(params$out,"/patel2024/figures/DotPlot_GenesOfInterest.pdf"), 
+    height = 15, width = 20)
+DotPlot(patel2024, 
+        features = dotplot_genes,
+        cols = c("blue1","red")) + 
+  theme(axis.text.x = element_text(angle = 90, hjust=1, size = 16))
+  #theme(axis.text.y = element_text(angle = 45, hjust=1))
+dev.off()
+```
+
+
+```{r dotplot}
+pdf(file = paste0(params$out,"/patel2024/figures/DotPlot_v1_FINAL.pdf"),
+    width = 5.72, height = 3.79)
+Clustered_DotPlot(patel2024, 
+                  plot_km_elbow = FALSE,
+                  features = dotplot_genes,
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v3,
+                  exp_color_min = -2,
+                  exp_color_middle = 0,
+                  exp_color_max = 2,
+                  row_label_size = 12,
+                  column_label_size = 12,
+                  legend_label_size = 12,
+                  x_lab_rotate = 90,
+                  legend_title_size = 12)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/DotPlot_v2_FINAL.pdf"),
+    width = 5.72, height = 3.79)
+Clustered_DotPlot(patel2024, 
+                  plot_km_elbow = FALSE,
+                  features = dotplot_genes_v2, # removed SCP markers
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v3,
+                  exp_color_min = -2,
+                  exp_color_middle = 0,
+                  exp_color_max = 2,
+                  row_label_size = 12,
+                  column_label_size = 12,
+                  legend_label_size = 12,
+                  x_lab_rotate = 90,
+                  legend_title_size = 12)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/DotPlot_v3_FINAL.pdf"),
+    width = 5.72, height = 3.79)
+Clustered_DotPlot(patel2024, 
+                  plot_km_elbow = FALSE,
+                  features = dotplot_genes_v3, # add one SCP marker
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v3,
+                  exp_color_min = -2,
+                  exp_color_middle = 0,
+                  exp_color_max = 2,
+                  row_label_size = 12,
+                  column_label_size = 12,
+                  legend_label_size = 12,
+                  x_lab_rotate = 90,
+                  legend_title_size = 12)
+dev.off()
+
+pdf(file = paste0(params$out,"/patel2024/figures/DotPlot_v4_FINAL.pdf"),
+    width = 5.72, height = 3.79)
+Clustered_DotPlot(patel2024, 
+                  plot_km_elbow = FALSE,
+                  features = dotplot_genes_v4, # PLP1 instead of S100B
+                  colors_use_exp = c("lightblue","red"),
+                  raster = FALSE,
+                  seed = 2805,
+                  colors_use_idents = COLOR_CODE_v3,
+                  exp_color_min = -2,
+                  exp_color_middle = 0,
+                  exp_color_max = 2,
+                  row_label_size = 12,
+                  column_label_size = 12,
+                  legend_label_size = 12,
+                  x_lab_rotate = 90,
+                  legend_title_size = 12)
+dev.off()
+```
+
+```{r}
+saveRDS(patel2024, file = paste0(params$nb_tumors,"/patel2024.scRNA/data/scRNA-seq/patel2024_NB_cluster.Rds"))
+```
+
+---------------------------------------------------------------------------
+
+```{r}
+sessionInfo()
+```
+
