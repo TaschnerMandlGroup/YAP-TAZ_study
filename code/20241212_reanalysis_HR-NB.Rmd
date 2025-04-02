@@ -1942,7 +1942,7 @@ clust_4 <- filter(counts_merged, liger_clusters == "4")
 
 # Fit GLM
 glm_fit <- glm(
-  percent_cells / total_lib_size ~ 0 + treatment_groups * MYCN,
+  percent_cells / total_lib_size ~ 0 + treatment_groups + MYCN,
   family = binomial(link = "logit"), 
   weights = total_lib_size,
   data = clust_4
@@ -2451,6 +2451,19 @@ wilcox.test(percent_cells ~ comparison_groups,
                           comparison_groups %in% c("treated_non-amplified", "untreated_non-amplified")))$p.value
 ```
 
+# ___MiloR DA analysis___
+
+
+```{r}
+library(dplyr)
+
+# Update MYCN column to replace "non-amplified" with "nonamplified"
+NB_HR_patients_complete_stage_M_only@meta.data <- NB_HR_patients_complete_stage_M_only@meta.data   %>%
+  mutate(MYCN = recode(MYCN, "non-amplified" = "nonamplified"))
+
+NB_HR_patients_complete_stage_M_only@meta.data$MYCN <- factor(NB_HR_patients_complete_stage_M_only@meta.data$MYCN)
+```
+
 
 ```{r miloR - prepare data}
 # MiloR doesn't use the "original" clusters but rather creates neighborhoods
@@ -2463,10 +2476,6 @@ Idents(NB_HR_patients_complete_stage_M_only) <- NB_HR_patients_complete_stage_M_
 NB_HR_patients_complete_stage_M_only <- RunPCA(NB_HR_patients_complete_stage_M_only,  
                             npcs = 50,
                             reduction.name = "PCA")
-#NB_HR_patients_complete_stage_M_only <- RunUMAP(NB_HR_patients_complete_stage_M_only, 
-#                             dims = 1:50,
-#                             reduction = "PCA",
-#                             reduction.name = "new_UMAP")
 
 # 2. save as single cell experiment (SCE)
 rna_milo <- Milo(as.SingleCellExperiment(NB_HR_patients_complete_stage_M_only))
@@ -2484,7 +2493,7 @@ reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(NB_HR_patient
 plotUMAP(rna_milo, 
          colour_by="treatment_groups") + 
   plotUMAP(rna_milo, 
-           colour_by="sample_name")
+           colour_by="MYCN")
 
 # 6. Constructing kNN graph 
 rna_milo <- buildGraph(rna_milo, 
@@ -2500,7 +2509,7 @@ rna_milo <- buildGraph(rna_milo,
 # 7. Define cell neighbourhoods, with k = 10
 rna_milo <- makeNhoods(rna_milo, 
                        prop = 0.1, 
-                       k = 10, 
+                       k = 10,  
                        d = 30, 
                        refined = TRUE
                        ) 
@@ -2526,11 +2535,23 @@ rna_milo <- calcNhoodDistance(rna_milo,
                               d = 30)
 ```
 
+## ___untreated vs. treated___
+
 ```{r miloR - DA testing}
+
+comparisons <- c("treatment_groupsuntreated - treatment_groupstreated")
+
+model <- model.matrix(~ 0 + treatment_groups, 
+                      data = rna_design)
+contrast <- makeContrasts(contrasts = comparisons, 
+                               levels = model)
+
 # DA testing
 da_results <- testNhoods(rna_milo, 
-                         design = ~ 0 + treatment_groups + MYCN, # treatment * MYCN produced no hoods
-                         design.df = rna_design)
+                         design = ~ 0 + treatment_groups,  
+                         # treatment * MYCN produced no hoods
+                         design.df = rna_design,
+                         model.contrasts = comparisons)
 head(da_results)
 
 da_results %>%
@@ -2563,8 +2584,70 @@ umap_pl + nh_graph_pl +
 # d.  logFC vulcano plot
 ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + 
   geom_point() +
-  geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR)
+  geom_hline(yintercept = 1.3,colour = "darkgreen",linewidth = 2) + 
+  geom_hline(yintercept = 1, colour = "lightgreen",linewidth = 2) + 
+  geom_vline(xintercept = c(-3,3),colour = "lightblue",linewidth = 2) + 
+  geom_vline(xintercept = c(-1.5,1.5),colour = "darkblue",linewidth = 2) 
+  
 ```
+
+## ___untreated [nMNA vs. MNA] vs. treated [nMNA vs. MNA]___
+
+```{r miloR - DA testing}
+
+comparisons <- c("treatment_groupsuntreated - treatment_groupstreated",
+                 "MYCNnonamplified - MYCNamplified")
+
+# DA testing
+da_results_w_MYCN <- testNhoods(rna_milo, 
+                         design = ~ 0 + (treatment_groups + MYCN), 
+                         design.df = rna_design,
+                         fdr.weighting="graph-overlap",
+                         model.contrasts =  comparisons
+                         )
+
+# to test multiple comparisons then we need to pass them sequentially to testNhoods, then apply an additional multiple testing correction to the spatial FDR values.
+
+head(da_results_w_MYCN)
+
+da_results %>%
+  arrange(- SpatialFDR) %>%
+  head() 
+
+rna_milo <- buildNhoodGraph(rna_milo)
+
+# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
+
+# a. Neighborhoods plot
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, 
+                                da_results, 
+                                layout = "UMAP", 
+                                alpha = 0.1) 
+
+# b. Single-cell UMAP
+umap_pl <- plotReducedDim(rna_milo, 
+                          dimred = "UMAP", 
+                          colour_by = "sample_name",
+                          text_by = "treatment_groups", 
+                          text_size = 3, 
+                          point_size = 0.5) +
+  guides(fill = "none")
+
+# c. combined plots
+umap_pl + nh_graph_pl +
+  plot_layout(guides = "collect")
+
+# d.  logFC vulcano plot
+ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + 
+  geom_point() +
+  geom_hline(yintercept = 1.3,colour = "darkgreen",linewidth = 2) + 
+  geom_hline(yintercept = 1, colour = "lightgreen",linewidth = 2) + 
+  geom_vline(xintercept = c(-3,3),colour = "lightblue",linewidth = 2) + 
+  geom_vline(xintercept = c(-1.5,1.5),colour = "darkblue",linewidth = 2) 
+  
+```
+
+## ___Downstream analysis___
 
 ```{r miloR - results}
 table(da_results$SpatialFDR < 0.1)
@@ -2574,8 +2657,8 @@ da_results <- annotateNhoods(rna_milo,
                              da_results, 
                              coldata_col = "liger_clusters")
 
-# define cut-off for homogeneous vs. heterogeneous neighbourhoods
-ggplot(da_results, aes(liger_clusters_fraction)) + geom_histogram(bins=500)
+# define cut-off for homogeneous vs. heterogeneous neighborhoods
+ggplot(da_results, aes(liger_clusters_fraction)) + geom_histogram(bins=200)
 
 # remove hoods that contain mixed cell type populations (homogeneity above 80%)
 da_results$cluster_fraction <- 
@@ -2585,20 +2668,57 @@ da_results$cluster_fraction <-
 # Automatic grouping of neighborhoods
 da_results <- groupNhoods(rna_milo, 
                           da_results, 
-                          da.fdr = 0.1,
-                          max.lfc.delta = 10)
+                          da.fdr = 0.10,
+                          max.lfc.delta = 3)
 head(da_results)
 
 plotNhoodGroups(rna_milo, da_results, layout = "UMAP")
 
-# filter only significant populations (less than 1% false discovery rate and 
-# fold change bigger than 5)
+# filter only significant populations (less than 5% false discovery rate and 
+# fold change bigger than 3)
 results <- da_results %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 2) # based on the histogram
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 1) # based on the histogram
 
-plotDAbeeswarm(da_results, group.by = "liger_clusters")
-plotDAbeeswarm(da_results, group.by = "NhoodGroup")
+results_increase_after_treatment <- da_results %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & logFC >= 1)
+
+results_decrease_after_treatment <- da_results %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & logFC <= -1)
+
+plotDAbeeswarm(results, group.by = "liger_clusters")
+plotDAbeeswarm(results, group.by = "NhoodGroup")
 ```
+
+```{r}
+cluster_MES_filter <- da_results$cluster_fraction == c("4","6")
+
+cluster_MES_DA <- da_results[cluster_MES_filter,]
+
+cluster_MES_DA_table <- data.frame(cluster_MES_DA$NhoodGroup,cluster_MES_DA$logFC)
+
+# Create density plot v1
+ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
+  geom_density(fill = "blue", alpha = 0.5) +  # Density plot with shaded area
+  theme_minimal() +
+  labs(
+    title = "DA of MES clusters after treatment",
+    x = "logFC",
+    y = "Density"
+  ) +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Create density plot v2
+ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Histogram of logFC", x = "logFC", y = "Count")
+
+```
+
+
 
 ```{r save results}
 write.table(results, 
@@ -2792,6 +2912,111 @@ signif_genes <- DGE %>% arrange(FDR) %>% filter(FDR < 0.01 & abs(logFC) >= 1)
 signif_genes
 ```
 
+# ___Alternative DA testing method___
+
+```{r}
+library(DAseq)
+python2use <- "/home/rstudio/.virtualenvs/r-reticulate/bin/python"
+
+# 20 patients with NB histology, high-risk tumors and information on treatment
+NB_HR_patients_complete <- readRDS(file = paste0(params$out,
+                                  "patel2024/Rds/patel2024_NB-HR_tumor_cluster.Rds"))
+
+filter_by_treatment <- NB_HR_patients_complete$Treatment_Status  == "no treatment"
+NB_HR_patients_complete <- NB_HR_patients_complete[,filter_by_treatment]
+table(NB_HR_patients_complete$Treatment_Status)
+
+
+# Create a new column based on the existing column
+NB_HR_patients_complete$treatment_groups <- ifelse(NB_HR_patients_complete$Treatment_Status == "no treatment", "untreated", "treated")
+
+# Verify the new column has been added
+table(NB_HR_patients_complete$treatment_groups)
+
+labels_treat <- X.label.info[X.label.info$condition == "treated", "treatment_groups"]
+labels_untrea <- X.label.info[X.label.info$condition == "untreated", "treatment_groups"]
+
+da_cells <- getDAcells(  
+    X = NB_HR_patients_complete,
+    cell.labels = NB_HR_patients_complete$treatment_groups,
+    labels.1 = labels_treat,
+    labels.2 = labels_untrea,
+    k.vector = seq(50, 500, 50))
+```
+
+
+# ___DA testing with super-FACS method___
+
+source: https://bioconductor.org/books/3.13/OSCA.multisample/differential-abundance.html
+
+```{r}
+sce <- as.SingleCellExperiment(NB_HR_patients_complete_stage_M_only)
+abundances <- table(sce$liger_clusters, 
+                    sce$sample_name) 
+abundances <- unclass(abundances) 
+head(abundances)
+
+library(edgeR)
+
+metadata.info <- colData(sce)[match(colnames(abundances), 
+                                    sce$sample_name),]
+dge <- DGEList(abundances, 
+               samples = metadata.info)
+dge 
+
+# For a DA analysis of cluster abundances, filtering is generally not required as most clusters will not be of low-abundance (otherwise there would not have been enough evidence to define the cluster in the first place).
+
+#keep <- filterByExpr(dge, group = dge$sample_name$treatment_groups)
+#dge <- dge[keep,]
+#summary(keep)
+
+design <- model.matrix(~ factor(treatment_groups), 
+                       dge$sample) # dge$sample is in this case the metadata
+
+dge <- estimateDisp(dge, design, 
+                    trend = "none")
+summary(dge$common.dispersion)
+
+plotBCV(dge, 
+        cex = 1)
+
+fit.ab <- glmQLFit(dge, 
+                   design, 
+                   robust = TRUE, 
+                   abundance.trend = FALSE)
+summary(fit.ab)
+summary(fit.ab$df.prior)
+
+plotQLDisp(fit.ab, 
+           cex = 1)
+
+res <- glmQLFTest(fit.ab, 
+                  coef = ncol(design))
+summary(decideTests(res))
+topTags(res)
+```
+
+```{r}
+# alternative hypothesis: we assume most cell types will not change in 
+# abundance after treatment
+
+dge2 <- calcNormFactors(dge)
+dge2$sample_name$norm.factors
+
+dge2 <- estimateDisp(dge2, 
+                     design, 
+                     trend = "none")
+fit.ab2 <- glmQLFit(dge2, 
+                    design, 
+                    robust = TRUE, 
+                    abundance.trend = FALSE)
+res2 <- glmQLFTest(fit.ab2, 
+                   coef = ncol(design))
+topTags(res2, n = 10)
+
+summary(decideTests(res2))
+topTags(res2)
+```
 
 # ___Plots___
 
@@ -2856,38 +3081,6 @@ DimPlot(NB_HR_patients_complete,
 #dev.off()
 ```
 
-
-# ___Alternative DA testing method___
-
-```{r}
-library(DAseq)
-python2use <- "/home/rstudio/.virtualenvs/r-reticulate/bin/python"
-
-# 20 patients with NB histology, high-risk tumors and information on treatment
-NB_HR_patients_complete <- readRDS(file = paste0(params$out,
-                                  "patel2024/Rds/patel2024_NB-HR_tumor_cluster.Rds"))
-
-filter_by_treatment <- NB_HR_patients_complete$Treatment_Status  == "no treatment"
-NB_HR_patients_complete <- NB_HR_patients_complete[,filter_by_treatment]
-table(NB_HR_patients_complete$Treatment_Status)
-
-
-# Create a new column based on the existing column
-NB_HR_patients_complete$treatment_groups <- ifelse(NB_HR_patients_complete$Treatment_Status == "no treatment", "untreated", "treated")
-
-# Verify the new column has been added
-table(NB_HR_patients_complete$treatment_groups)
-
-labels_treat <- X.label.info[X.label.info$condition == "treated", "treatment_groups"]
-labels_untrea <- X.label.info[X.label.info$condition == "untreated", "treatment_groups"]
-
-da_cells <- getDAcells(  
-    X = NB_HR_patients_complete,
-    cell.labels = NB_HR_patients_complete$treatment_groups,
-    labels.1 = labels_treat,
-    labels.2 = labels_untrea,
-    k.vector = seq(50, 500, 50))
-```
 
 
 # ___SessionInfo___
