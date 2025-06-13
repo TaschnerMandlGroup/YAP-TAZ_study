@@ -17,9 +17,9 @@ output:
     toc_depth: '5'
 params:
   input: "/home/rstudio/mnt_data/"
-  out: "/home/rstudio/mnt_out/"
+  out: "/home/rstudio/mnt_out/MES_project/"
   data: "/home/rstudio/mnt_data/"
-  nb_tumors: "/home/rstudio/mnt_nb_tumors/"
+  nb_tumors: "/home/rstudio/mnt_data/nb_tumors/"
   GO_db: "/home/rstudio/mnt_resources/GSEA_GeneSetEnrichments/"
   markers: "/home/rstudio/mnt_resources/MES_ADRN/"
 ---
@@ -37,7 +37,7 @@ options(future.globals.maxSize = 8 * 10^9)
 
 print(params)
 
-source("/home/rstudio/scRNA.scATAC/Rmd/MES_project/MES_project_setup.R")
+source("/home/rstudio/MES_project/MES_project_setup.R")
 ```
 
 ```{r R packages: load}
@@ -120,6 +120,14 @@ Idents(NB_HR_patients_complete) <- NB_HR_patients_complete$liger_clusters
 DimPlot(NB_HR_patients_complete, 
         seed = 2805, 
         cols = COLOR_CODE_CLUST, 
+        raster = TRUE,
+        shuffle = FALSE,
+        label.size = 40,
+        pt.size = 2)
+
+DimPlot(NB_HR_patients_complete, 
+        seed = 2805, 
+        cols = COLOR_CODE_CLUST, 
         raster = FALSE,
         shuffle = FALSE,
         label.size = 40, 
@@ -138,7 +146,6 @@ DimPlot(NB_HR_patients_complete,
 # i think we should remove them as this will only hinder the analysis
 ```
 
-
 ```{r eval=FALSE, include=FALSE}
 # Excluding stage Ms and L from the data
 filter_by_stage <- NB_HR_patients_complete$INRGSS_Stage == "M"
@@ -153,35 +160,44 @@ saveRDS(NB_HR_patients_complete,
         file = paste0(params$nb_tumors, "patel2024.scRNA/data/scRNA-seq/Rds/patel2024_NB-HR-M_tumor_cluster.Rds"))
 ```
 
-
 ```{r eval=FALSE, include=FALSE}
 NB_HR_patients_complete <- readRDS(file = 
                                paste0(params$nb_tumors,
                                       "patel2024.scRNA/data/scRNA-seq/Rds/patel2024_NB-HR-M_tumor_cluster.Rds")) # stage M only
 ```
 
-
 ```{r fig.height=8, fig.width=15}
+# Tumor cell clusters plot
 Idents(NB_HR_patients_complete) <- NB_HR_patients_complete$liger_clusters
 
+pdf(paste0(params$out,"figures/patel2024_UMAP_treatment_groups.pdf"),
+    height=4, width=8)
 DimPlot(NB_HR_patients_complete, 
         seed = 2805, 
         cols = COLOR_CODE_CLUST, 
         raster = FALSE,
         shuffle = FALSE,
-        label.size = 40, 
+        label.size = 60,
+        pt.size = 0.5,
         split.by = "treatment_groups")
+dev.off()
 
+table(NB_HR_patients_complete$treatment_groups)
+
+# MYCN status plot
 Idents(NB_HR_patients_complete) <- NB_HR_patients_complete$treatment_groups
 
+pdf(paste0(params$out,"figures/patel2024_UMAP_MYCN_groups.pdf"),
+    height=4, width=8)
 DimPlot(NB_HR_patients_complete, 
         seed = 2805, 
         raster = FALSE,
         shuffle = FALSE,
-        label.size = 40, 
+        label.size = 60, 
+        pt.size = 0.5,
         split.by = "MYCN_groups") 
+dev.off()
 
-table(NB_HR_patients_complete$treatment_groups)
 table(NB_HR_patients_complete$MYCN_groups)
 ```
 
@@ -235,9 +251,9 @@ plotUMAP(rna_milo,
   plotUMAP(rna_milo, 
            colour_by="MYCN")
 
-# 6. Constructing kNN graph 
-rna_milo <- buildGraph(rna_milo, 
-                       k = 10, 
+# 6. Constructing kNN graph   
+rna_milo <- buildGraph(rna_milo,  
+                       k = 10,  
                        d = 30)
 
 # MiloR tool defined a neighbourhood of an index cell as the group of cells 
@@ -314,13 +330,13 @@ umap_pl <- plotReducedDim(rna_milo,
 umap_pl + nh_graph_pl +
   plot_layout(guides = "collect")
 
-# d.  logFC vulcano plot [to access where to set the cut-offs]
+# d.  logFC vulcano plot [to assess where to set the cut-offs]
 ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + 
   geom_point() +
-  geom_hline(yintercept = 1.3,colour = "darkgreen",linewidth = 2) + 
-  geom_hline(yintercept = 1, colour = "lightgreen",linewidth = 2) + 
-  geom_vline(xintercept = c(-3,3),colour = "lightblue",linewidth = 2) + 
-  geom_vline(xintercept = c(-1.5,1.5),colour = "darkblue",linewidth = 2) 
+  geom_hline(yintercept = 1.3,colour = "darkgreen",linewidth = 1) + 
+  geom_hline(yintercept = 1, colour = "lightgreen",linewidth = 1) + 
+  geom_vline(xintercept = c(-3,3),colour = "lightblue",linewidth = 1) + 
+  geom_vline(xintercept = c(-1.5,1.5),colour = "darkblue",linewidth = 1) 
 ```
 
 ## ___Downstream analysis___
@@ -364,9 +380,12 @@ results_decrease_after_treatment <- da_results %>%
 
 plotDAbeeswarm(results, group.by = "liger_clusters")
 plotDAbeeswarm(results, group.by = "NhoodGroup")
+
+saveRDS(da_results, file = paste0(params$out,"Rds/milor_final_analysis.Rds"))
 ```
 
 ```{r DA analysis - MES cluster 4}
+da_results <- readRDS(file = paste0(params$out,"Rds/milor_final_analysis.Rds"))
 cluster_MES_filter <- da_results$cluster_fraction == "4"
 
 cluster_MES_DA <- da_results[cluster_MES_filter,]
@@ -374,12 +393,14 @@ cluster_MES_DA <- da_results[cluster_MES_filter,]
 cluster_MES_DA_table <- data.frame(cluster_MES_DA$Nhood,
                                    cluster_MES_DA$logFC)
 
-# Create density plot v1
+# Create density plot
+pdf(paste0(params$out,"figures/patel2024_miloR_denstiyplot_MES_cluster4.pdf"),
+    height = 4, width = 8)
 ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
-  geom_density(fill = "blue", alpha = 0.5) +  # Density plot with shaded area
+  geom_density(fill = "#961E1E", alpha = 0.5) +  # Density plot with shaded area
   theme_minimal() +
   labs(
-    title = "DA of MES clusters after treatment",
+    title = "DA of MES cluster 4 after treatment",
     x = "logFC",
     y = "Density"
   ) +
@@ -387,6 +408,7 @@ ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
   )
+dev.off()
 ```
 
 ```{r DA analysis - MES cluster 6}
@@ -397,12 +419,14 @@ cluster_MES_DA <- da_results[cluster_MES_filter,]
 cluster_MES_DA_table <- data.frame(cluster_MES_DA$Nhood,
                                    cluster_MES_DA$logFC)
 
-# Create density plot v1
+# Create density plot
+pdf(paste0(params$out,"figures/patel2024_miloR_denstiyplot_MES_cluster6.pdf"),
+    height = 4, width = 8)
 ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
-  geom_density(fill = "red", alpha = 0.5) +  # Density plot with shaded area
+  geom_density(fill = "#B94A4A", alpha = 0.5) + 
   theme_minimal() +
   labs(
-    title = "DA of MES clusters after treatment",
+    title = "DA of MES cluster 6 after treatment",
     x = "logFC",
     y = "Density"
   ) +
@@ -410,6 +434,7 @@ ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC)) +
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
   )
+dev.off()
 ```
 
 ```{r DA analysis - MES cluster 4+6+11}
@@ -422,14 +447,16 @@ cluster_MES_DA$cluster_fraction <- as.factor(cluster_MES_DA$cluster_fraction)
 cluster_MES_DA_table <- data.frame(cluster_MES_DA$cluster_fraction,
                                    cluster_MES_DA$logFC)
 
-# Create density plot v1
+# Create density plot
+pdf(paste0(params$out,"figures/patel2024_miloR_denstiyplot_MES_clusters.pdf"),
+    height = 4, width = 12)
 ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC,
                                  fill =  cluster_MES_DA.cluster_fraction)) +
-  geom_density(alpha = 0.5) +  # Density plot with shaded area
+  geom_density(alpha = 0.5) +  
   theme_minimal() +
-   scale_fill_manual(values = c("#ff7b7b","#A30000","#ff0000")) +
+   scale_fill_manual(values = c("#ff7b7b","#B94A4A","#961E1E")) +
   labs(
-    title = "DA of MES clusters after treatment",
+    title = "DA of all MES clusters after treatment",
     x = "logFC",
     y = "Density"
   ) +
@@ -437,6 +464,7 @@ ggplot(cluster_MES_DA_table, aes(x = cluster_MES_DA.logFC,
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
   )
+dev.off()
 ```
 
 ```{r DA analysis - ADR clusters}
@@ -453,13 +481,15 @@ cluster_ADR_DA_table <- data.frame(cluster_ADR_DA$Nhood,
 cluster_ADR_DA_table_sorted <- cluster_ADR_DA_table[order(cluster_ADR_DA_table[, 1]), ]
 cluster_ADR_DA_table_sorted_unique <- unique(cluster_ADR_DA_table_sorted)
 
-# Create density plot v1
+# Create density plot
+pdf(paste0(params$out,"figures/patel2024_miloR_denstiyplot_ADR_clusters.pdf"),
+    height = 4, width = 8)
 ggplot(cluster_ADR_DA_table_sorted_unique, aes(x = cluster_ADR_DA.logFC)) +
-  geom_density(alpha = 0.5) +  # Density plot with shaded area
-  geom_density(fill = "blue", alpha = 0.5) +
+  geom_density(alpha = 0.5) +  
+  geom_density(fill = "#0055b3", alpha = 0.5) +
   theme_minimal()  +
   labs(
-    title = "DA of ADR clusters after treatment",
+    title = "DA of all ADR clusters after treatment",
     x = "logFC",
     y = "Density"
   ) +
@@ -467,6 +497,7 @@ ggplot(cluster_ADR_DA_table_sorted_unique, aes(x = cluster_ADR_DA.logFC)) +
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
   )
+dev.off()
 ```
 
 ```{r DA analysis - all cluster}
@@ -475,12 +506,19 @@ da_results$cluster_fraction <- as.factor(da_results$cluster_fraction)
 cluster_DA_table <- data.frame(da_results$cluster_fraction,
                                    da_results$logFC)
 
-# Create density plot v1
-ggplot(cluster_DA_table, aes(x = da_results.logFC,
-                                 fill =  da_results.cluster_fraction)) +
-  geom_density(alpha = 0.5) +  # Density plot with shaded area
+colnames(cluster_DA_table) <- c("clusters", "logFC")
+
+clust_order <- c("1", "2", "3", "4","5","6","7","8","9","10","11","12","Mixed")  
+cluster_DA_table$clusters <- factor(cluster_DA_table$clusters, levels = clust_order)
+
+# Create density plot 
+pdf(paste0(params$out,"figures/patel2024_miloR_densityplot_all_clusters.pdf"),
+    height = 5, width = 8)
+ggplot(cluster_DA_table, aes(x = logFC,
+                             fill = clusters)) +
+  geom_density(alpha = 0.5) +  
   theme_minimal() +
-   scale_fill_manual(values = COLOR_CODE_CLUST) +
+   scale_fill_manual(values = COLOR_CODE_CLUST_v2) +
   labs(
     title = "DA of all clusters after treatment",
     x = "logFC",
@@ -489,11 +527,15 @@ ggplot(cluster_DA_table, aes(x = da_results.logFC,
   theme(
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
-  )  + facet_wrap(~ da_results.cluster_fraction)
+  )  + facet_wrap(~ clusters)
+dev.off()
 ```
 
 ```{r}
-COLOR_CODE_CLUST <- c("9" = "green", "4" = "blue", "5" = "purple")
+COLOR_CODE_CLUST <- c("9" = "green", 
+                      "4" = "blue", 
+                      "5" = "purple")
+
 DimPlot(NB_HR_patients_complete,
 seed = 2805,
 cols = COLOR_CODE_CLUST,
@@ -532,13 +574,13 @@ ggplot(metadata, aes(x = factor(liger_clusters), y = nCount_RNA, fill = treatmen
 ```{r save results, eval=FALSE, include=FALSE}
 write.table(results, 
             file = 
-            paste0(params$out, "patel2024/tables/patel2024_NB-HR_DA_testing_treatedVSuntreated.csv"),
+            paste0(params$out, "tables/patel2024_NB-HR_DA_testing_treatedVSuntreated.csv"),
                    sep = "\t", quote = FALSE)
 
 saveRDS(rna_milo, 
         file = 
-          paste0(params$nb_tumors,
-                      "patel2024.scRNA/data/scRNA-seq/Rds/patel2024_NB-HR_tumorCells_DAtesting.Rds"))
+          paste0(params$out,
+                      "Rds/patel2024_NB-HR_tumorCells_DAtesting.Rds"))
 ```
 
 
@@ -657,6 +699,40 @@ topTags(res2, n = 10)
 summary(decideTests(res2))
 topTags(res2)
 ```
+
+# ___Alternative DA testing method___
+
+```{r eval=FALSE, include=FALSE}
+library(DAseq)
+python2use <- "/home/rstudio/.virtualenvs/r-reticulate/bin/python"
+
+# 20 patients with NB histology, high-risk tumors and information on treatment
+NB_HR_patients_complete <- readRDS(file = paste0(params$out,
+                                  "patel2024/Rds/patel2024_NB-HR_tumor_cluster.Rds"))
+
+filter_by_treatment <- NB_HR_patients_complete$Treatment_Status  == "no treatment"
+NB_HR_patients_complete <- NB_HR_patients_complete[,filter_by_treatment]
+table(NB_HR_patients_complete$Treatment_Status)
+
+
+# Create a new column based on the existing column
+NB_HR_patients_complete$treatment_groups <- ifelse(NB_HR_patients_complete$Treatment_Status == "no treatment", "untreated", "treated")
+
+# Verify the new column has been added
+table(NB_HR_patients_complete$treatment_groups)
+
+labels_treat <- X.label.info[X.label.info$condition == "treated", "treatment_groups"]
+labels_untrea <- X.label.info[X.label.info$condition == "untreated", "treatment_groups"]
+
+da_cells <- getDAcells(  
+    X = NB_HR_patients_complete,
+    cell.labels = NB_HR_patients_complete$treatment_groups,
+    labels.1 = labels_treat,
+    labels.2 = labels_untrea,
+    k.vector = seq(50, 500, 50))
+```
+
+
 
 # ___SessionInfo___
 
